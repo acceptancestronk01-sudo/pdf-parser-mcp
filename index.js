@@ -1,4 +1,5 @@
 import express from 'express';
+import { createPaymentMiddleware } from './payment-verification.js';
 import axios from 'axios';
 import pdf from 'pdf-parse';
 import dotenv from 'dotenv';
@@ -17,6 +18,9 @@ const PAYMENT_CONFIG = {
   chainId: 'eip155:8453',
   payTo: '0xf081ee84c0d85278a6242bc265f0b312021ebeb1'
 };
+
+// X402 Payment Verification Middleware
+const verifyPayment = createPaymentMiddleware(PAYMENT_CONFIG);
 
 // Root landing page
 app.get('/', (req, res) => {
@@ -311,22 +315,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Payment required response helper
-function paymentRequired(res) {
-  return res.status(402).json({
-    error: 'Payment Required',
-    message: 'This endpoint requires x402 payment',
-    payment: {
-      scheme: 'exact',
-      network: PAYMENT_CONFIG.chainId,
-      price: `$${PAYMENT_CONFIG.price}`,
-      currency: PAYMENT_CONFIG.currency,
-      payTo: PAYMENT_CONFIG.payTo
-    },
-    instructions: 'Include payment signature in PAYMENT-SIGNATURE header (x402 v2) or X-PAYMENT header (x402 v1)'
-  });
-}
-
 // Helper function to fetch PDF from URL
 async function fetchPDF(url) {
   try {
@@ -353,12 +341,8 @@ async function fetchPDF(url) {
 }
 
 // PDF parsing endpoint with payment requirement
-app.post('/api/parse', async (req, res) => {
-  const paymentProof = req.headers['payment-signature'] || req.headers['x-payment'];
-
-  if (!paymentProof) {
-    return paymentRequired(res);
-  }
+app.post('/api/parse', verifyPayment, async (req, res) => {
+  // Payment verified by middleware - safe to proceed
 
   const { url } = req.body;
 
@@ -415,12 +399,8 @@ app.post('/api/parse', async (req, res) => {
 });
 
 // PDF metadata endpoint with payment requirement
-app.post('/api/metadata', async (req, res) => {
-  const paymentProof = req.headers['payment-signature'] || req.headers['x-payment'];
-
-  if (!paymentProof) {
-    return paymentRequired(res);
-  }
+app.post('/api/metadata', verifyPayment, async (req, res) => {
+  // Payment verified by middleware - safe to proceed
 
   const { url } = req.body;
 
